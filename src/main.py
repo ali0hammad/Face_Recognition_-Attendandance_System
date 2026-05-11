@@ -15,22 +15,34 @@ class AttendanceSystem(ctk.CTk):
         super().__init__()
 
         self.title("Face Recognition Attendance System")
-        self.geometry("900x600")
+        self.geometry("1100x600")
 
         # Load students from DB
         self.known_students = database.get_all_students()
         self.known_encodings = [s['encoding'] for s in self.known_students]
 
         # Global UI Setup
-        # Show video label outside the tabs so it's visible during registration too
-        self.video_label = ctk.CTkLabel(self, text="")
-        self.video_label.pack(pady=10)
+        # Use grid layout to place camera on left and controls on right
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-        self.status_label = ctk.CTkLabel(self, text="System Ready", font=ctk.CTkFont(size=20, weight="bold"))
+        # Left Frame for Camera & Status
+        self.left_frame = ctk.CTkFrame(self)
+        self.left_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+
+        self.video_label = ctk.CTkLabel(self.left_frame, text="")
+        self.video_label.pack(pady=10, expand=True)
+
+        self.status_label = ctk.CTkLabel(self.left_frame, text="System Ready", font=ctk.CTkFont(size=20, weight="bold"))
         self.status_label.pack(pady=10)
 
-        self.tabview = ctk.CTkTabview(self)
-        self.tabview.pack(padx=20, pady=10, fill="both", expand=True)
+        # Right Frame for Tabview
+        self.right_frame = ctk.CTkFrame(self)
+        self.right_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
+
+        self.tabview = ctk.CTkTabview(self.right_frame)
+        self.tabview.pack(padx=10, pady=10, fill="both", expand=True)
 
         self.tab_attendance = self.tabview.add("Attendance Mode")
         self.tab_admin = self.tabview.add("Admin Panel")
