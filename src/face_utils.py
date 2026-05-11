@@ -51,20 +51,23 @@ def get_face_encoding(image_bgr):
 
 def process_frame_for_attendance(image_bgr, known_encodings, known_students, ear_threshold=0.25):
     """
-    Process a single frame for attendance:
-    1. Find all faces
+    Process a single frame for attendance with optimizations:
+    1. Downscale frame for faster face detection
     2. Check for blink (liveness)
     3. Recognize face if blinked
-    4. Draw bounding boxes
-
-    Returns:
-        processed_image: Image with annotations
-        recognized_student: Dict of student info if recognized and blinked, else None
-        status_message: Info message about the current state
-        blink_status: Boolean indicating if a blink was detected
+    4. Draw bounding boxes on original frame
     """
-    rgb_image = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-    face_locations = face_recognition.face_locations(rgb_image)
+    # Resize frame for faster face detection (1/4 size)
+    small_frame = cv2.resize(image_bgr, (0, 0), fx=0.25, fy=0.25)
+    rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+
+    # Find faces in the smaller frame
+    small_face_locations = face_recognition.face_locations(rgb_small_frame)
+
+    # Scale face locations back up to original size
+    face_locations = []
+    for (top, right, bottom, left) in small_face_locations:
+        face_locations.append((top * 4, right * 4, bottom * 4, left * 4))
 
     # Only process if we found exactly one face to avoid confusion
     if len(face_locations) == 0:
@@ -81,7 +84,10 @@ def process_frame_for_attendance(image_bgr, known_encodings, known_students, ear
     # Draw yellow bounding box around the face
     cv2.rectangle(image_bgr, (left, top), (right, bottom), (0, 255, 255), 2)
 
-    # Get facial landmarks to check for blink
+    # We need the full RGB image for landmarks and encodings
+    rgb_image = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+    # Get facial landmarks to check for blink (using full image and scaled up location)
     face_landmarks_list = face_recognition.face_landmarks(rgb_image, face_locations)
 
     has_blinked = False

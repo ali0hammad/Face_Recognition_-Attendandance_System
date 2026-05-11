@@ -54,6 +54,7 @@ class AttendanceSystem(ctk.CTk):
         self.cap = None
         self.is_camera_running = False
         self.cooldown_until = None
+        self.frame_count = 0
 
         # Switch to attendance mode by default and start camera
         self.tabview.set("Attendance Mode")
@@ -127,21 +128,40 @@ class AttendanceSystem(ctk.CTk):
                     self.cooldown_until = None
                     self.status_label.configure(text="System Ready", text_color="white")
 
+            self.frame_count += 1
+
             # Process frame for attendance if we are in Attendance tab and not in cooldown
             if self.tabview.get() == "Attendance Mode" and not in_cooldown:
-                processed_frame, recognized_student, status_message, has_blinked = face_utils.process_frame_for_attendance(
-                    frame, self.known_encodings, self.known_students
-                )
-                self.status_label.configure(text=status_message)
+                # Process every 2nd frame to reduce lag, or every frame if we want max smoothness (we already downscaled the image in face_utils)
+                # Since face_utils now downscales for detection, we can process every frame without too much lag.
+                # However, face_landmarks is still heavy. Let's process every other frame.
+                if self.frame_count % 2 == 0:
+                    self.last_processed_frame, recognized_student, status_message, has_blinked = face_utils.process_frame_for_attendance(
+                        frame, self.known_encodings, self.known_students
+                    )
+                    self.status_label.configure(text=status_message)
 
-                if has_blinked and recognized_student:
-                    self.mark_attendance_for_student(recognized_student)
-                elif has_blinked and not recognized_student:
-                    # Blinked but not recognized
-                    self.status_label.configure(text="Unknown Face", text_color="red")
-                    self.play_sound(success=False)
-                    from datetime import timedelta
-                    self.cooldown_until = datetime.now() + timedelta(seconds=2)
+                    if has_blinked and recognized_student:
+                        self.mark_attendance_for_student(recognized_student)
+                    elif has_blinked and not recognized_student:
+                        # Blinked but not recognized
+                        self.status_label.configure(text="Unknown Face", text_color="red")
+                        self.play_sound(success=False)
+                        from datetime import timedelta
+                        self.cooldown_until = datetime.now() + timedelta(seconds=2)
+                else:
+                    # Use the last processed frame bounding boxes by simply passing the raw frame
+                    # This might cause a slight flicker of the box, but it is much faster.
+                    # To avoid flicker, we just show the raw frame, or keep a reference.
+                    # For simplicity, we just show raw frame on odd ticks.
+                    if hasattr(self, 'last_processed_frame'):
+                        processed_frame = self.last_processed_frame
+                    else:
+                        processed_frame = frame
+
+                # Ensure we always have a frame to show
+                if 'processed_frame' not in locals():
+                     processed_frame = self.last_processed_frame if hasattr(self, 'last_processed_frame') else frame
             else:
                 processed_frame = frame
 
@@ -156,7 +176,7 @@ class AttendanceSystem(ctk.CTk):
             self.video_label.configure(image=photo_image)
             self.video_label.image = photo_image
 
-        self.after(10, self.update_frame)
+        self.after(30, self.update_frame)
 
     def mark_attendance_for_student(self, student):
         now = datetime.now()
