@@ -45,7 +45,8 @@ class AttendanceSystem(ctk.CTk):
         self.right_frame = ctk.CTkFrame(self)
         self.right_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
 
-        self.tabview = ctk.CTkTabview(self.right_frame)
+        self.active_tab = "Attendance Mode"
+        self.tabview = ctk.CTkTabview(self.right_frame, command=self.on_tab_change)
         self.tabview.pack(padx=10, pady=10, fill="both", expand=True)
 
         self.tab_attendance = self.tabview.add("Attendance Mode")
@@ -54,9 +55,14 @@ class AttendanceSystem(ctk.CTk):
         self.setup_attendance_tab()
         self.setup_admin_tab()
 
-        # Footer Signature
-        self.footer = ctk.CTkLabel(self, text="Ali Hammad // 2025-CE-45", font=ctk.CTkFont(size=10, slant="italic"), text_color="gray")
-        self.footer.grid(row=1, column=1, sticky="se", padx=10, pady=5)
+        # Footer Signature Frame
+        self.footer_frame = ctk.CTkFrame(self, fg_color="transparent", border_width=1, border_color="#3b82f6", corner_radius=6)
+        self.footer_frame.grid(row=1, column=1, sticky="se", padx=10, pady=(0, 10))
+
+        self.footer = ctk.CTkLabel(self.footer_frame, text="Ali Hammad // 2025-CE-45",
+                                   font=ctk.CTkFont(size=12, weight="bold", slant="italic"),
+                                   text_color="#60a5fa") # Distinct light blue
+        self.footer.pack(padx=10, pady=2)
 
         # Camera Setup
         self.cap = None
@@ -72,9 +78,62 @@ class AttendanceSystem(ctk.CTk):
         self.tabview.set("Attendance Mode")
         self.start_camera()
 
+    def on_tab_change(self):
+        self.active_tab = self.tabview.get()
+
     def setup_attendance_tab(self):
-        self.attendance_info = ctk.CTkLabel(self.tab_attendance, text="Please stand in front of the camera and blink to mark attendance.", font=ctk.CTkFont(size=14))
-        self.attendance_info.pack(pady=20)
+        # Top Digital Clock
+        self.clock_frame = ctk.CTkFrame(self.tab_attendance, fg_color="transparent")
+        self.clock_frame.pack(pady=(10, 5))
+
+        self.time_label = ctk.CTkLabel(self.clock_frame, text="00:00:00", font=ctk.CTkFont(size=40, weight="bold"))
+        self.time_label.pack()
+
+        self.date_label = ctk.CTkLabel(self.clock_frame, text="YYYY-MM-DD", font=ctk.CTkFont(size=16))
+        self.date_label.pack()
+
+        self.update_clock()
+
+        # Instructions
+        self.attendance_info = ctk.CTkLabel(self.tab_attendance, text="Please look directly at the camera and blink to mark your attendance.", font=ctk.CTkFont(size=14))
+        self.attendance_info.pack(pady=(10, 20))
+
+        # Recent Scans Log Ecosystem
+        self.log_frame = ctk.CTkFrame(self.tab_attendance)
+        self.log_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        self.log_title = ctk.CTkLabel(self.log_frame, text="Recent Scans Today", font=ctk.CTkFont(size=14, weight="bold"))
+        self.log_title.pack(pady=(5, 10))
+
+        self.recent_logs_text = ctk.CTkTextbox(self.log_frame, state="disabled", fg_color="transparent")
+        self.recent_logs_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+
+        self.update_recent_logs()
+
+    def update_clock(self):
+        now = datetime.now()
+        self.time_label.configure(text=now.strftime("%I:%M:%S %p"))
+        self.date_label.configure(text=now.strftime("%A, %B %d, %Y"))
+        self.after(1000, self.update_clock)
+
+    def update_recent_logs(self):
+        logs = database.get_attendance_logs()
+        today = datetime.now().strftime("%Y-%m-%d")
+
+        # Filter for today only and grab top 5
+        today_logs = [log for log in logs if log[2] == today][:5]
+
+        self.recent_logs_text.configure(state="normal")
+        self.recent_logs_text.delete("1.0", "end")
+
+        if not today_logs:
+            self.recent_logs_text.insert("1.0", "No attendance marked today yet.")
+        else:
+            for log in today_logs:
+                # log = (roll_no, name, date, time, status)
+                self.recent_logs_text.insert("end", f"[{log[3]}] {log[1]} ({log[0]}) - {log[4]}\n")
+
+        self.recent_logs_text.configure(state="disabled")
 
     def setup_admin_tab(self):
         # Configure layout for symmetrical Admin Panel
@@ -197,8 +256,9 @@ class AttendanceSystem(ctk.CTk):
             self.reg_status_label.configure(text=msg, text_color="red")
 
     def auto_sync_csv(self):
-        if self.export_dir:
+        if hasattr(self, 'export_dir') and self.export_dir:
             self.export_students()
+            self.export_attendance()
 
 
 
@@ -221,7 +281,7 @@ class AttendanceSystem(ctk.CTk):
 
     def process_frame_background(self):
         while self.is_camera_running:
-            if self.current_frame is not None and self.tabview.get() == "Attendance Mode":
+            if self.current_frame is not None and self.active_tab == "Attendance Mode":
                 # Only process if we aren't in cooldown
                 in_cooldown = False
                 if self.cooldown_until and datetime.now() < self.cooldown_until:
@@ -261,7 +321,7 @@ class AttendanceSystem(ctk.CTk):
                     self.cooldown_until = None
                     self.status_label.configure(text="System Ready", text_color="white")
 
-            if self.tabview.get() == "Attendance Mode" and not in_cooldown:
+            if self.active_tab == "Attendance Mode" and not in_cooldown:
                 # Apply the latest background processing results to the UI frame
                 if self.processed_result:
                     recognized_student, status_message, has_blinked, bounding_box = self.processed_result
@@ -310,6 +370,8 @@ class AttendanceSystem(ctk.CTk):
         if success:
             self.status_label.configure(text=f"Attendance Marked: {student['name']} ({status})", text_color="green" if not is_late else "orange")
             self.play_sound(success=True)
+            self.update_recent_logs()
+            self.auto_sync_csv() # Also update export file seamlessly
         else:
             self.status_label.configure(text=f"Already Marked: {student['name']}", text_color="yellow")
             self.play_sound(success=True) # Or distinct sound for already marked
