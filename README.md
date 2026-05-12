@@ -1,4 +1,4 @@
-# BLINK - Biometric Liveness & Identity Network Keeper
+# BLINK: Python Based Facial Recognition Attendance System
 
 ## Introduction
 **BLINK** is a secure, standalone Python desktop application built to streamline and modernize attendance tracking. By replacing manual roll calls and ID swiping with instant facial recognition and anti-spoofing techniques, BLINK offers a reliable and user-friendly experience suitable for educational and corporate environments.

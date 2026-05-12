@@ -127,3 +127,71 @@ def process_frame_for_attendance(image_bgr, known_encodings, known_students, ear
                     status_message = "Unknown Face detected."
 
     return image_bgr, recognized_student, status_message, has_blinked
+
+
+def process_frame_for_attendance_threaded(image_bgr, known_encodings, known_students, ear_threshold=0.25):
+    """
+    Thread-safe version of process_frame that returns bounding box coordinates
+    instead of directly drawing on the image to decouple UI rendering from processing.
+    """
+    # Resize frame for faster face detection (1/4 size)
+    small_frame = cv2.resize(image_bgr, (0, 0), fx=0.25, fy=0.25)
+    rgb_small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+
+    # Find faces in the smaller frame
+    small_face_locations = face_recognition.face_locations(rgb_small_frame)
+
+    # Scale face locations back up to original size
+    face_locations = []
+    for (top, right, bottom, left) in small_face_locations:
+        face_locations.append((top * 4, right * 4, bottom * 4, left * 4))
+
+    # Only process if we found exactly one face to avoid confusion
+    if len(face_locations) == 0:
+        return image_bgr, None, "No face detected.", False, None
+    elif len(face_locations) > 1:
+        return image_bgr, None, "Multiple faces detected. Please show only one.", False, None
+
+    # Extract single face location
+    top, right, bottom, left = face_locations[0]
+    bounding_box = (top, right, bottom, left)
+
+    # We need the full RGB image for landmarks and encodings
+    rgb_image = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
+
+    # Get facial landmarks to check for blink
+    face_landmarks_list = face_recognition.face_landmarks(rgb_image, face_locations)
+
+    has_blinked = False
+    ear_value = 0.0
+
+    if len(face_landmarks_list) > 0:
+        landmarks = face_landmarks_list[0]
+        if 'left_eye' in landmarks and 'right_eye' in landmarks:
+            has_blinked, ear_value = is_blinking(landmarks, ear_threshold)
+
+    recognized_student = None
+    status_message = "Please blink to verify liveness."
+
+    if has_blinked:
+        status_message = "Blink detected. Recognizing..."
+
+        # Only compute encoding if a blink was detected (saves processing)
+        face_encodings = face_recognition.face_encodings(rgb_image, face_locations)
+
+        if len(face_encodings) > 0 and known_encodings:
+            encoding_to_check = face_encodings[0]
+
+            # Compare with known encodings
+            matches = face_recognition.compare_faces(known_encodings, encoding_to_check, tolerance=0.5)
+            face_distances = face_recognition.face_distance(known_encodings, encoding_to_check)
+
+            if len(face_distances) > 0:
+                best_match_index = np.argmin(face_distances)
+                if matches[best_match_index]:
+                    recognized_student = known_students[best_match_index]
+                    status_message = f"Recognized: {recognized_student['name']}"
+                else:
+                    status_message = "Unknown Face detected."
+
+    return image_bgr, recognized_student, status_message, has_blinked, bounding_box
