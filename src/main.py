@@ -54,7 +54,7 @@ class AttendanceSystem(ctk.CTk):
         self.setup_admin_tab()
 
         # Footer Signature Frame
-        self.footer_frame = ctk.CTkFrame(self, fg_color="transparent", border_width=1, border_color="#3b82f6", corner_radius=6)
+        self.footer_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.footer_frame.grid(row=1, column=1, sticky="se", padx=10, pady=(0, 10))
 
         self.footer = ctk.CTkLabel(self.footer_frame, text="Ali Hammad // 2025-CE-45",
@@ -104,20 +104,15 @@ class AttendanceSystem(ctk.CTk):
         self.reg_status_label = ctk.CTkLabel(self.reg_frame, text="", font=ctk.CTkFont(size=14))
         self.reg_status_label.pack(pady=10)
 
+        self.export_students_btn = ctk.CTkButton(self.reg_frame, text="Export Registered Students", width=300, command=self.export_students)
+        self.export_students_btn.pack(pady=10)
+
+        self.export_attendance_btn = ctk.CTkButton(self.reg_frame, text="Export Attendance Report", width=300, command=self.export_attendance)
+        self.export_attendance_btn.pack(pady=10)
 
 
 
 
-    def delete_student_ui(self, roll_no):
-        success, msg = database.delete_student(roll_no)
-        if success:
-            self.known_students = database.get_all_students()
-            self.known_encodings = [s['encoding'] for s in self.known_students]
-            self.refresh_directory()
-            self.auto_sync_csv()
-            self.reg_status_label.configure(text=f"Student {roll_no} deleted.", text_color="orange")
-        else:
-            self.reg_status_label.configure(text=msg, text_color="red")
 
     def auto_sync_csv(self):
         self.export_students()
