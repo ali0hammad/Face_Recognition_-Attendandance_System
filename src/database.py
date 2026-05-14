@@ -108,43 +108,6 @@ def get_attendance_logs():
     return rows
 
 
-def update_student(old_roll_no, new_roll_no, new_name):
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        # Update student details
-        cursor.execute('''
-            UPDATE students SET roll_no = ?, name = ? WHERE roll_no = ?
-        ''', (new_roll_no, new_name, old_roll_no))
-
-        # Cascade update to attendance logs if roll number changed
-        if old_roll_no != new_roll_no:
-            cursor.execute('''
-                UPDATE attendance SET roll_no = ? WHERE roll_no = ?
-            ''', (new_roll_no, old_roll_no))
-
-        conn.commit()
-        return True, "Student updated successfully."
-    except sqlite3.IntegrityError:
-        return False, f"Roll No {new_roll_no} is already taken."
-    except Exception as e:
-        return False, str(e)
-    finally:
-        conn.close()
-
-def delete_student(roll_no):
-    conn = get_connection()
-    cursor = conn.cursor()
-    try:
-        cursor.execute('DELETE FROM attendance WHERE roll_no = ?', (roll_no,))
-        cursor.execute('DELETE FROM students WHERE roll_no = ?', (roll_no,))
-        conn.commit()
-        return True, "Student deleted successfully."
-    except Exception as e:
-        return False, str(e)
-    finally:
-        conn.close()
-
 if __name__ == "__main__":
     init_db()
     print("Database initialized.")

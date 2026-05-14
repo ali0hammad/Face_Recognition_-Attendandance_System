@@ -1,8 +1,6 @@
 import customtkinter as ctk
-from tkinter import filedialog
 import cv2
 import threading
-import copy
 from PIL import Image, ImageTk
 import database
 import face_utils
@@ -87,100 +85,28 @@ class AttendanceSystem(ctk.CTk):
         self.attendance_info.pack(pady=(20, 20))
 
     def setup_admin_tab(self):
-        # Configure layout for symmetrical Admin Panel
-        self.tab_admin.grid_columnconfigure(0, weight=1)
-        self.tab_admin.grid_rowconfigure(0, weight=0) # Reg
-        self.tab_admin.grid_rowconfigure(1, weight=1) # Directory
-
-        # 1. Registration Frame (Top)
+        # Minimalist Admin Panel - Registration Only
         self.reg_frame = ctk.CTkFrame(self.tab_admin)
-        self.reg_frame.grid(row=0, column=0, pady=(10, 5), padx=10, sticky="nsew")
+        self.reg_frame.pack(pady=50, padx=50, fill="both", expand=True)
 
-        self.reg_title = ctk.CTkLabel(self.reg_frame, text="Register New Student", font=ctk.CTkFont(size=16, weight="bold"))
-        self.reg_title.grid(row=0, column=0, columnspan=3, pady=5)
+        self.reg_title = ctk.CTkLabel(self.reg_frame, text="Register New Student", font=ctk.CTkFont(size=24, weight="bold"))
+        self.reg_title.pack(pady=(30, 20))
 
-        self.name_entry = ctk.CTkEntry(self.reg_frame, placeholder_text="Student Name")
-        self.name_entry.grid(row=1, column=0, padx=5, pady=5, sticky="ew")
+        self.name_entry = ctk.CTkEntry(self.reg_frame, placeholder_text="Student Name", width=300)
+        self.name_entry.pack(pady=10)
 
-        self.roll_entry = ctk.CTkEntry(self.reg_frame, placeholder_text="Roll Number")
-        self.roll_entry.grid(row=1, column=1, padx=5, pady=5, sticky="ew")
+        self.roll_entry = ctk.CTkEntry(self.reg_frame, placeholder_text="Roll Number", width=300)
+        self.roll_entry.pack(pady=10)
 
-        self.capture_btn = ctk.CTkButton(self.reg_frame, text="Capture & Register", command=self.register_student)
-        self.capture_btn.grid(row=1, column=2, padx=5, pady=5)
+        self.capture_btn = ctk.CTkButton(self.reg_frame, text="Capture Face & Register", width=300, command=self.register_student)
+        self.capture_btn.pack(pady=20)
 
-        self.reg_status_label = ctk.CTkLabel(self.reg_frame, text="")
-        self.reg_status_label.grid(row=2, column=0, columnspan=3, pady=2)
-
-        # 2. Bottom section split into Student Directory and Attendance Export
-        self.bottom_frame = ctk.CTkFrame(self.tab_admin, fg_color="transparent")
-        self.bottom_frame.grid(row=1, column=0, pady=5, padx=10, sticky="nsew")
-        self.bottom_frame.grid_columnconfigure(0, weight=1)
-        self.bottom_frame.grid_columnconfigure(1, weight=1)
-        self.bottom_frame.grid_rowconfigure(0, weight=1)
-
-        # 2a. Student Directory
-        self.dir_frame = ctk.CTkFrame(self.bottom_frame)
-        self.dir_frame.grid(row=0, column=0, padx=(0, 5), sticky="nsew")
-
-        self.dir_title = ctk.CTkLabel(self.dir_frame, text="Student Directory", font=ctk.CTkFont(size=16, weight="bold"))
-        self.dir_title.pack(pady=5)
-
-        # Add scrollable frame for students
-        self.student_list_frame = ctk.CTkScrollableFrame(self.dir_frame)
-        self.student_list_frame.pack(fill="both", expand=True, padx=5, pady=5)
-
-        self.refresh_directory()
-
-        # 2b. Attendance Export Directory
-        self.export_frame = ctk.CTkFrame(self.bottom_frame)
-        self.export_frame.grid(row=0, column=1, padx=(5, 0), sticky="nsew")
-
-        self.export_title = ctk.CTkLabel(self.export_frame, text="Attendance & Exports", font=ctk.CTkFont(size=16, weight="bold"))
-        self.export_title.pack(pady=5)
-
-        self.export_students_btn = ctk.CTkButton(self.export_frame, text="Export Students CSV", command=self.export_students)
-        self.export_students_btn.pack(pady=10)
-
-        self.export_attendance_btn = ctk.CTkButton(self.export_frame, text="Export Attendance CSV", command=self.export_attendance)
-        self.export_attendance_btn.pack(pady=10)
-
-        self.export_status_label = ctk.CTkLabel(self.export_frame, text="")
-        self.export_status_label.pack(pady=5)
+        self.reg_status_label = ctk.CTkLabel(self.reg_frame, text="", font=ctk.CTkFont(size=14))
+        self.reg_status_label.pack(pady=10)
 
 
 
-    def refresh_directory(self):
-        # Clear existing widgets
-        for widget in self.student_list_frame.winfo_children():
-            widget.destroy()
 
-        for student in self.known_students:
-            row_frame = ctk.CTkFrame(self.student_list_frame)
-            row_frame.pack(fill="x", pady=2)
-
-            lbl = ctk.CTkLabel(row_frame, text=f"{student['roll_no']} - {student['name']}", anchor="w")
-            lbl.pack(side="left", padx=5, expand=True, fill="x")
-
-            edit_btn = ctk.CTkButton(row_frame, text="Edit", width=40,
-                                     command=lambda s=student: self.edit_student_ui(s))
-            edit_btn.pack(side="right", padx=5)
-
-            del_btn = ctk.CTkButton(row_frame, text="Del", width=40, fg_color="red", hover_color="darkred",
-                                    command=lambda r=student['roll_no']: self.delete_student_ui(r))
-            del_btn.pack(side="right", padx=5)
-
-    def edit_student_ui(self, student):
-        dialog = ctk.CTkInputDialog(text=f"Enter new Name for {student['roll_no']} (leave blank to cancel):", title="Edit Student")
-        new_name = dialog.get_input()
-        if new_name:
-            success, msg = database.update_student(student['roll_no'], student['roll_no'], new_name)
-            if success:
-                self.known_students = database.get_all_students()
-                self.refresh_directory()
-                self.auto_sync_csv()
-                self.reg_status_label.configure(text=f"Student {student['roll_no']} updated.", text_color="green")
-            else:
-                self.reg_status_label.configure(text=msg, text_color="red")
 
     def delete_student_ui(self, roll_no):
         success, msg = database.delete_student(roll_no)
@@ -351,8 +277,7 @@ class AttendanceSystem(ctk.CTk):
                 self.known_students = database.get_all_students()
                 self.known_encodings = [s['encoding'] for s in self.known_students]
 
-                # Refresh UI and Sync
-                self.refresh_directory()
+                # Auto-sync exports in background
                 self.auto_sync_csv()
 
                 # Clear fields
@@ -373,9 +298,8 @@ class AttendanceSystem(ctk.CTk):
                 writer.writerow(['Roll No', 'Name'])
                 for s in students:
                     writer.writerow([s['roll_no'], s['name']])
-            self.export_status_label.configure(text=f"Exported to {filename}", text_color="green")
-        except Exception as e:
-            self.export_status_label.configure(text=f"Export failed: {str(e)}", text_color="red")
+        except Exception:
+            pass
 
     def export_attendance(self):
         logs = database.get_attendance_logs()
@@ -386,9 +310,8 @@ class AttendanceSystem(ctk.CTk):
                 writer.writerow(['Roll No', 'Name', 'Date', 'Status'])
                 for log in logs:
                     writer.writerow(log)
-            self.export_status_label.configure(text=f"Exported to {filename}", text_color="green")
-        except Exception as e:
-            self.export_status_label.configure(text=f"Export failed: {str(e)}", text_color="red")
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     database.init_db()
