@@ -27,7 +27,6 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             roll_no TEXT NOT NULL,
             date TEXT NOT NULL,
-            time TEXT NOT NULL,
             status TEXT NOT NULL,
             FOREIGN KEY (roll_no) REFERENCES students (roll_no)
         )
@@ -74,7 +73,7 @@ def get_all_students():
         })
     return students
 
-def mark_attendance(roll_no, date, time, status):
+def mark_attendance(roll_no, date, status):
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -88,9 +87,9 @@ def mark_attendance(roll_no, date, time, status):
         return False, "Already Marked"
 
     cursor.execute('''
-        INSERT INTO attendance (roll_no, date, time, status)
-        VALUES (?, ?, ?, ?)
-    ''', (roll_no, date, time, status))
+        INSERT INTO attendance (roll_no, date, status)
+        VALUES (?, ?, ?)
+    ''', (roll_no, date, status))
     conn.commit()
     conn.close()
     return True, "Attendance Marked"
@@ -99,10 +98,10 @@ def get_attendance_logs():
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        SELECT a.roll_no, s.name, a.date, a.time, a.status
+        SELECT a.roll_no, s.name, a.date, a.status
         FROM attendance a
         JOIN students s ON a.roll_no = s.roll_no
-        ORDER BY a.date DESC, a.time DESC
+        ORDER BY a.date DESC
     ''')
     rows = cursor.fetchall()
     conn.close()

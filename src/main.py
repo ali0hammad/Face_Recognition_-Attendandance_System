@@ -82,58 +82,9 @@ class AttendanceSystem(ctk.CTk):
         self.active_tab = self.tabview.get()
 
     def setup_attendance_tab(self):
-        # Top Digital Clock
-        self.clock_frame = ctk.CTkFrame(self.tab_attendance, fg_color="transparent")
-        self.clock_frame.pack(pady=(10, 5))
-
-        self.time_label = ctk.CTkLabel(self.clock_frame, text="00:00:00", font=ctk.CTkFont(size=40, weight="bold"))
-        self.time_label.pack()
-
-        self.date_label = ctk.CTkLabel(self.clock_frame, text="YYYY-MM-DD", font=ctk.CTkFont(size=16))
-        self.date_label.pack()
-
-        self.update_clock()
-
         # Instructions
         self.attendance_info = ctk.CTkLabel(self.tab_attendance, text="Please look directly at the camera and blink to mark your attendance.", font=ctk.CTkFont(size=14))
-        self.attendance_info.pack(pady=(10, 20))
-
-        # Recent Scans Log Ecosystem
-        self.log_frame = ctk.CTkFrame(self.tab_attendance)
-        self.log_frame.pack(fill="both", expand=True, padx=20, pady=10)
-
-        self.log_title = ctk.CTkLabel(self.log_frame, text="Recent Scans Today", font=ctk.CTkFont(size=14, weight="bold"))
-        self.log_title.pack(pady=(5, 10))
-
-        self.recent_logs_text = ctk.CTkTextbox(self.log_frame, state="disabled", fg_color="transparent")
-        self.recent_logs_text.pack(fill="both", expand=True, padx=10, pady=(0, 10))
-
-        self.update_recent_logs()
-
-    def update_clock(self):
-        now = datetime.now()
-        self.time_label.configure(text=now.strftime("%I:%M:%S %p"))
-        self.date_label.configure(text=now.strftime("%A, %B %d, %Y"))
-        self.after(1000, self.update_clock)
-
-    def update_recent_logs(self):
-        logs = database.get_attendance_logs()
-        today = datetime.now().strftime("%Y-%m-%d")
-
-        # Filter for today only and grab top 5
-        today_logs = [log for log in logs if log[2] == today][:5]
-
-        self.recent_logs_text.configure(state="normal")
-        self.recent_logs_text.delete("1.0", "end")
-
-        if not today_logs:
-            self.recent_logs_text.insert("1.0", "No attendance marked today yet.")
-        else:
-            for log in today_logs:
-                # log = (roll_no, name, date, time, status)
-                self.recent_logs_text.insert("end", f"[{log[3]}] {log[1]} ({log[0]}) - {log[4]}\n")
-
-        self.recent_logs_text.configure(state="disabled")
+        self.attendance_info.pack(pady=(20, 20))
 
     def setup_admin_tab(self):
         # Configure layout for symmetrical Admin Panel
@@ -187,14 +138,6 @@ class AttendanceSystem(ctk.CTk):
         self.export_title = ctk.CTkLabel(self.export_frame, text="Attendance & Exports", font=ctk.CTkFont(size=16, weight="bold"))
         self.export_title.pack(pady=5)
 
-        # Folder Selection
-        self.export_dir = ""
-        self.folder_btn = ctk.CTkButton(self.export_frame, text="Select Export Folder", command=self.select_export_folder)
-        self.folder_btn.pack(pady=10)
-
-        self.folder_label = ctk.CTkLabel(self.export_frame, text="No folder selected", text_color="gray", wraplength=180)
-        self.folder_label.pack(pady=5)
-
         self.export_students_btn = ctk.CTkButton(self.export_frame, text="Export Students CSV", command=self.export_students)
         self.export_students_btn.pack(pady=10)
 
@@ -204,12 +147,7 @@ class AttendanceSystem(ctk.CTk):
         self.export_status_label = ctk.CTkLabel(self.export_frame, text="")
         self.export_status_label.pack(pady=5)
 
-    def select_export_folder(self):
-        folder = filedialog.askdirectory()
-        if folder:
-            self.export_dir = folder
-            self.folder_label.configure(text=folder)
-            self.export_status_label.configure(text="Folder updated.", text_color="green")
+
 
     def refresh_directory(self):
         # Clear existing widgets
@@ -256,9 +194,8 @@ class AttendanceSystem(ctk.CTk):
             self.reg_status_label.configure(text=msg, text_color="red")
 
     def auto_sync_csv(self):
-        if hasattr(self, 'export_dir') and self.export_dir:
-            self.export_students()
-            self.export_attendance()
+        self.export_students()
+        self.export_attendance()
 
 
 
@@ -359,18 +296,14 @@ class AttendanceSystem(ctk.CTk):
     def mark_attendance_for_student(self, student):
         now = datetime.now()
         date_str = now.strftime("%Y-%m-%d")
-        time_str = now.strftime("%H:%M:%S")
 
-        # Simple late arrival logic: past 9:00 AM is late
-        is_late = now.hour >= 9
-        status = "Late" if is_late else "Present"
+        status = "Present"
 
-        success, msg = database.mark_attendance(student['roll_no'], date_str, time_str, status)
+        success, msg = database.mark_attendance(student['roll_no'], date_str, status)
 
         if success:
-            self.status_label.configure(text=f"Attendance Marked: {student['name']} ({status})", text_color="green" if not is_late else "orange")
+            self.status_label.configure(text=f"Attendance Marked: {student['name']} ({status})", text_color="green")
             self.play_sound(success=True)
-            self.update_recent_logs()
             self.auto_sync_csv() # Also update export file seamlessly
         else:
             self.status_label.configure(text=f"Already Marked: {student['name']}", text_color="yellow")
@@ -432,38 +365,28 @@ class AttendanceSystem(ctk.CTk):
             self.play_sound(success=False)
 
     def export_students(self):
-        if not hasattr(self, 'export_dir') or not self.export_dir:
-            self.export_status_label.configure(text="Please select a folder first.", text_color="orange")
-            return
-
         students = database.get_all_students()
-        filename = f"{self.export_dir}/students_list_{datetime.now().strftime('%Y%m%d')}.csv"
-
+        filename = "students_list.csv"
         try:
             with open(filename, 'w', newline='') as f:
                 writer = csv.writer(f)
                 writer.writerow(['Roll No', 'Name'])
                 for s in students:
                     writer.writerow([s['roll_no'], s['name']])
-            self.export_status_label.configure(text=f"Exported to {filename.split('/')[-1]}", text_color="green")
+            self.export_status_label.configure(text=f"Exported to {filename}", text_color="green")
         except Exception as e:
             self.export_status_label.configure(text=f"Export failed: {str(e)}", text_color="red")
 
     def export_attendance(self):
-        if not hasattr(self, 'export_dir') or not self.export_dir:
-            self.export_status_label.configure(text="Please select a folder first.", text_color="orange")
-            return
-
         logs = database.get_attendance_logs()
-        filename = f"{self.export_dir}/attendance_logs_{datetime.now().strftime('%Y%m%d')}.csv"
-
+        filename = "attendance_logs.csv"
         try:
             with open(filename, 'w', newline='') as f:
                 writer = csv.writer(f)
-                writer.writerow(['Roll No', 'Name', 'Date', 'Time', 'Status'])
+                writer.writerow(['Roll No', 'Name', 'Date', 'Status'])
                 for log in logs:
                     writer.writerow(log)
-            self.export_status_label.configure(text=f"Exported to {filename.split('/')[-1]}", text_color="green")
+            self.export_status_label.configure(text=f"Exported to {filename}", text_color="green")
         except Exception as e:
             self.export_status_label.configure(text=f"Export failed: {str(e)}", text_color="red")
 
